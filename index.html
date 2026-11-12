@@ -181,7 +181,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
         <li><span class="t">09:41:12</span><span><span class="e">prompt.captured</span> <span class="k">prompt_id</span> 7f3a… <span class="k">text</span> not stored</span></li>
         <li><span class="t">09:43:55</span><span><span class="e">usage.api_call</span> <span class="k">model</span> claude-opus-5-5 <span class="k">out</span> 4,812 tok</span></li>
         <li><span class="t">09:44:02</span><span><span class="e">instructions.loaded</span> CLAUDE.md, .claude/skills/go</span></li>
-        <li><span class="t">09:52:30</span><span><span class="e">commit</span> a91c0e2 <span class="k">Agent-Session</span> 3b0e…</span></li>
+        <li><span class="t">09:52:30</span><span><span class="e">commit.recorded</span> a91c0e2 <span class="k">ticket</span> PAY-412 <span class="k">prompt_id</span> 7f3a…</span></li>
         <li><span class="t">10:05:19</span><span><span class="e">work.pr_opened</span> <span class="k">branch</span> PAY-412-retry-webhooks</span></li>
       </ol>
     </figure>
@@ -201,6 +201,8 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
           <li>The model behind each turn, and tokens by type.</li>
           <li>Branch switches, and PRs opened by an agent.</li>
           <li>Prompts, with an id for each one.</li>
+          <li>Every commit, with the session and prompt behind it and its ticket key. Rebases and amends map old to new.</li>
+          <li>Tool approvals and refusals, per prompt.</li>
           <li>Hook and tool names, and the size of the hook's input.</li>
           <li>Which instruction files loaded, as repo-relative paths.</li>
         </ul>
@@ -227,7 +229,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
     <ol class="flow">
       <li><span class="n">1</span><b>Hooks</b><p>Claude Code and Codex call Livy at session start, each prompt and each tool. Git calls it on branch switch and commit.</p></li>
       <li><span class="n">2</span><b>Ledger</b><p>Each event becomes one JSON line, appended locally. A failed write is recorded as an error event, never dropped quietly.</p></li>
-      <li><span class="n">3</span><b>Emit</b><p>At session end, and daily, the ledger is rotated, checked and compressed. Raw lines are never edited.</p></li>
+      <li><span class="n">3</span><b>Emit</b><p>At session end, and daily, the ledger is rotated, checked and compressed. Raw lines are never edited, and uploaded files stay on your machine for 30 days.</p></li>
       <li><span class="n">4</span><b>Sink</b><p>Segments go to a folder you choose, Google Cloud Storage or S3. Each file is named by its content, so a retry is harmless.</p></li>
     </ol>
   </section>
@@ -237,7 +239,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
       <div class="txt">
         <span class="label">Commit trailers</span>
         <h2>Every agent commit, recorded</h2>
-        <p>When Claude Code or Codex makes a commit, Livy adds the session, the harness and the model as git trailers. Your own commits are left alone.</p>
+        <p>When Claude Code or Codex makes a commit, Livy adds the session, the harness and the model as git trailers. Your own commits get no trailers, but every commit in your repos is still recorded in the ledger.</p>
         <p class="soft">The model is stamped only when every agent active in that session agrees on it. If Livy can't be sure, it leaves the model out rather than guess. A trailer failure never blocks a commit.</p>
       </div>
       <div class="panel">
@@ -250,6 +252,28 @@ them at five attempts.
 <span class="r">Agent-Session:</span> 3b0e9c2a-41d7-4f0e-9a5b-2c81d0f7e611
 <span class="r">Agent-Harness:</span> claude-code@2.1.322
 <span class="r">Agent-Model:</span> claude-opus-5-5</pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="why">
+    <div class="side">
+      <div class="txt">
+        <span class="label">livy why</span>
+        <h2>What the agent did, behind any commit</h2>
+        <p>When a deploy breaks, start from the commit. <code>livy why &lt;sha&gt;</code>, or a range like <code>A..B</code>, lists the sessions, prompts, tools, models and tokens behind that change, and the ticket it belongs to. It never prints prompt text.</p>
+        <p class="soft"><code>livy incident &lt;id&gt; --range A..B</code> turns the same answer into one Markdown evidence pack for an incident review.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>livy why a91c0e2</span></div>
+<pre><span class="r">commit</span>   a91c0e2  <span class="c">ticket</span> PAY-412
+<span class="r">session</span>  3b0e…  claude-code · claude-opus-5-5
+<span class="r">prompts</span>  3 since the previous commit
+  7f3a…  Bash 4 · Edit 6 · Read 9
+         approvals accept 9, reject 1
+         calls 22 · out 14,960 tok
+  91c2…  Edit 2 · calls 5 · out 2,104 tok
+  c40d…  Bash 1 · calls 3 · out 880 tok</pre>
       </div>
     </div>
   </section>
@@ -278,8 +302,10 @@ them at five attempts.
   <section id="prompts">
     <header>
       <span class="label">Prompt capture</span>
-      <h2>Prompt text is off until you turn it on</h2>
-      <p class="soft">When an engineer opts in on their own machine, every field is scrubbed before it leaves: secrets, credentials and the names on your own denylist. Anything the scrubber's check refuses is held back, and nothing is sent at all without a denylist. Prompts go to their own destination, separate from the ledger, with a 180-day retention rule.</p>
+      <h2>Prompt text stays on your machine</h2>
+      <p class="soft">Livy keeps the text of your prompts in a private vault on your own machine for 90 days, so you can still see what was asked after the agent's transcripts are cleaned up. <code>livy vault backfill</code> fills it from transcripts already on disk.</p>
+      <p class="soft"><code>livy show --prompt &lt;id&gt;</code> or <code>--commit &lt;sha&gt;</code> shows you exactly what would be shared, scrubbed of secrets, credentials and the names on your denylist, and refuses without a denylist. Every reveal is logged with the prompt ids, never the text.</p>
+      <p class="soft">Sending prompt text anywhere is off until an engineer opts in on their own machine. It goes to its own destination, separate from the ledger, with a 180-day retention rule.</p>
     </header>
   </section>
 
@@ -336,7 +362,7 @@ livy doctor</pre>
   </section>
 
   <footer>
-    <span>livy · v0.1</span>
+    <span>livy · v0.1.0</span>
   </footer>
 </div>
 
@@ -384,7 +410,9 @@ Array.prototype.forEach.call(document.querySelectorAll('.copybtn[data-copy]'),fu
       out.push(['prompt.captured',[['prompt_id',hex(4)+'…'],['text','not stored']]]);
       out.push(['usage.api_call',[['model',model],['out',(800+Math.floor(Math.random()*6000)).toLocaleString('en-US')+' tok']]]);
     }
-    out.push(['commit',[[null,hex(7)],['Agent-Session',hex(4)+'…']]]);
+    var tk=br.split('-').slice(0,2).join('-'), sha=hex(7);
+    out.push(['commit.recorded',[[null,sha],['ticket',tk],['prompt_id',hex(4)+'…']]]);
+    if(Math.random()<.3) out.push(['commit.rewritten',[[null,sha+' → '+hex(7)],['kind','amend']]]);
     if(Math.random()<.6) out.push(['work.pr_opened',[['branch',br]]]);
     return out;
   }
