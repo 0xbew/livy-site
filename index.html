@@ -262,7 +262,6 @@ them at five attempts.
         <span class="label">livy why</span>
         <h2>What the agent did, behind any commit</h2>
         <p>When a deploy breaks, start from the commit. <code>livy why &lt;sha&gt;</code>, or a range like <code>A..B</code>, lists the sessions, prompts, tools, models and tokens behind that change, and the ticket it belongs to. It never prints prompt text.</p>
-        <p class="soft"><code>livy incident &lt;id&gt; --range A..B</code> turns the same answer into one Markdown evidence pack for an incident review.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy why a91c0e2</span></div>
@@ -278,6 +277,35 @@ them at five attempts.
     </div>
   </section>
 
+  <section id="incident">
+    <div class="side">
+      <div class="txt">
+        <span class="label">livy incident</span>
+        <h2>One file for the incident review</h2>
+        <p>Give it the incident and the two deploys. <code>livy incident INC-212 --range a1f03c2..d4e8b19</code> writes one Markdown pack: every commit in the deploy, which ones an agent made, the ticket each belongs to, and what the agent ran and spent to make it.</p>
+        <p class="soft">It holds ids and counts, never prompt text. Add <code>--excerpts</code> and it includes the prompts too, scrubbed the same way <code>livy show</code> scrubs them, and logs that they were revealed.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>INC-212.md</span></div>
+<pre><span class="r"># INC-212</span>  checkout returns 500 after deploy
+range    a1f03c2..d4e8b19 · 4 commits · 3 by agents
+tickets  PAY-412 (3) · no-ticket (1)
+
+<span class="r">## a91c0e2</span>  Retry failed webhook deliveries
+ticket   PAY-412 · claude-code · claude-opus-5-5
+prompts  3 · Bash 5 · Edit 8 · Read 9
+approved 12 · refused 1 · out 17,944 tok
+
+<span class="r">## c7d2f10</span>  Cap retries at five attempts
+ticket   PAY-412 · codex · gpt-5-codex
+prompts  1 · Edit 2 · out 3,210 tok
+
+<span class="r">## 5e0b8a4</span>  Bump the HTTP client
+<span class="c">no agent session · human commit</span></pre>
+      </div>
+    </div>
+  </section>
+
   <section id="doctor">
     <div class="side">
       <div class="txt">
@@ -286,13 +314,13 @@ them at five attempts.
         <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks, the ledger, the git hooks and commit trailers, where your data goes, and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
       </div>
       <div class="panel">
-        <div class="bar"><span>livy doctor</span><span>example</span></div>
+        <div class="bar"><span>livy doctor</span></div>
 <pre><span class="ok">[ok]</span>   hooks            Claude Code and Codex
 <span class="ok">[ok]</span>   ledger           written 2 min ago
-<span class="ok">[ok]</span>   git hooks        post-checkout in 3 repos
 <span class="ok">[ok]</span>   commit trailers  stamped in 3 repos
 <span class="ok">[ok]</span>   sink             local · ~/livy-data
-<span class="ok">[ok]</span>   daily flush      scheduled 18:00
+<span class="ok">[ok]</span>   otel receiver    up · tool decisions stored
+<span class="ok">[ok]</span>   daily flush      launchd
 <span class="wn">[warn]</span> denylist         none (only needed for
                         prompt capture)</pre>
       </div>
@@ -300,13 +328,31 @@ them at five attempts.
   </section>
 
   <section id="prompts">
-    <header>
-      <span class="label">Prompt capture</span>
-      <h2>Prompt text stays on your machine</h2>
-      <p class="soft">Livy keeps the text of your prompts in a private vault on your own machine for 90 days, so you can still see what was asked after the agent's transcripts are cleaned up. <code>livy vault backfill</code> fills it from transcripts already on disk.</p>
-      <p class="soft"><code>livy show --prompt &lt;id&gt;</code> or <code>--commit &lt;sha&gt;</code> shows you exactly what would be shared, scrubbed of secrets, credentials and the names on your denylist, and refuses without a denylist. Every reveal is logged with the prompt ids, never the text.</p>
-      <p class="soft">Sending prompt text anywhere is off until an engineer opts in on their own machine. It goes to its own destination, separate from the ledger, with a 180-day retention rule.</p>
-    </header>
+    <div class="side">
+      <div class="txt">
+        <span class="label">Prompt capture</span>
+        <h2>Prompt text stays on your machine</h2>
+        <p>Livy keeps the text of your prompts in a private vault on your own machine for 90 days, so you can still see what was asked after the agent's transcripts are cleaned up. <code>livy vault backfill</code> fills it from transcripts already on disk.</p>
+        <p class="soft"><code>livy show --prompt &lt;id&gt;</code> or <code>--commit &lt;sha&gt;</code> shows you exactly what would be shared: secrets, credentials and the names on your denylist are replaced, and it refuses to run without a denylist. Every reveal is logged with the prompt ids, never the text.</p>
+        <p class="soft">Sending prompt text anywhere is off until an engineer opts in on their own machine. It goes to its own destination, separate from the ledger, with a 180-day retention rule.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>livy show --commit a91c0e2</span></div>
+<pre><span class="r">prompt</span> 7f3a… · 09:41:12 · acme/payments · PAY-412
+Webhook deliveries that failed in the last hour
+should retry with backoff. Cap it at five attempts,
+and check with <span class="wn">[teammate]</span> before touching the queue
+config. The staging key is <span class="wn">[secret]</span>.
+
+<span class="r">prompt</span> 91c2… · 09:48:40
+Move the retry into the worker, not the handler.
+
+<span class="r">prompt</span> c40d… · 09:51:02
+Run the webhook tests and commit.
+
+<span class="c">3 prompts shown · logged as prompt.revealed (ids only)</span></pre>
+      </div>
+    </div>
   </section>
 
   <section id="install">
@@ -440,5 +486,6 @@ Array.prototype.forEach.call(document.querySelectorAll('.copybtn[data-copy]'),fu
   setTimeout(function(){ol.classList.add('live');run()},2200);
 })();
 </script>
+
 
 </body></html>
