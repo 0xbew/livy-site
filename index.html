@@ -136,6 +136,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
   .ledger li:nth-child(2){animation-delay:.08s}.ledger li:nth-child(3){animation-delay:.16s}
   .ledger li:nth-child(4){animation-delay:.24s}.ledger li:nth-child(5){animation-delay:.32s}
   .ledger li:nth-child(6){animation-delay:.40s}.ledger li:nth-child(7){animation-delay:.48s}
+  .ledger li:nth-child(8){animation-delay:.56s}
   @keyframes ink{from{opacity:.25;transform:translateX(-4px)}to{opacity:1;transform:none}}
   .ledger ol.live li{animation:none}
   .ledger ol.live li.new{animation:ink .5s ease-out both}
@@ -157,6 +158,8 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
     </a>
     <ul>
       <li><a href="#records">What it records</a></li>
+      <li><a href="#harnesses">Agents</a></li>
+      <li><a href="#skills">Skills</a></li>
       <li><a href="#how">How it works</a></li>
       <li><a href="#trailers">Commit trailers</a></li>
       <li><a href="#install">Install</a></li>
@@ -166,8 +169,8 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
   <section class="hero" id="top">
     <div class="copy">
       <h1>Write it down <em>while it happens.</em></h1>
-      <p class="lead">Livy records what your coding agents do: sessions, prompts, branch switches, the model behind each turn, token use, and which instruction files actually loaded. One line per event, in an append-only ledger. It never blocks the agent.</p>
-      <p class="soft">Works with Claude Code and Codex. One small Go binary, built from source. Your data goes to a folder you choose, or to your own bucket.</p>
+      <p class="lead">Livy records what your coding agents do: sessions, prompts, branch switches, the model behind each turn, token use, which instruction files actually loaded, and which version of each skill ran. One line per event, in an append-only ledger. It never blocks the agent.</p>
+      <p class="soft">Works with Claude Code and Amp, and reads Codex's own logs. Livy is one small Go program, built from source: the agents' hooks call it as things happen, a scheduled flush ships the ledger, and a background receiver takes the agents' OTEL export unless you turn it off. Your data goes to a folder you choose, your own bucket, or a git repository.</p>
       <div class="ctas">
         <a class="btn primary" href="#install">Install Livy</a>
       </div>
@@ -179,7 +182,8 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
         <li><span class="t">09:41:12</span><span><span class="e">work.started</span> <span class="k">branch</span> PAY-412-retry-webhooks</span></li>
         <li><span class="t">09:41:12</span><span><span class="e">prompt.captured</span> <span class="k">prompt_id</span> 7f3a… <span class="k">text</span> not stored</span></li>
         <li><span class="t">09:43:55</span><span><span class="e">usage.api_call</span> <span class="k">model</span> claude-opus-5-5 <span class="k">out</span> 4,812 tok</span></li>
-        <li><span class="t">09:44:02</span><span><span class="e">instructions.loaded</span> CLAUDE.md, .claude/skills/go</span></li>
+        <li><span class="t">09:44:02</span><span><span class="e">instructions.loaded</span> CLAUDE.md</span></li>
+        <li><span class="t">09:44:09</span><span><span class="e">skill.loaded</span> go-review <span class="k">sha256</span> 4c1e… <span class="k">by</span> subagent</span></li>
         <li><span class="t">09:52:30</span><span><span class="e">commit.recorded</span> a91c0e2 <span class="k">ticket</span> PAY-412 <span class="k">prompt_id</span> 7f3a…</span></li>
         <li><span class="t">10:05:19</span><span><span class="e">work.pr_opened</span> <span class="k">branch</span> PAY-412-retry-webhooks</span></li>
       </ol>
@@ -204,6 +208,8 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
           <li>Tool approvals and refusals, per prompt.</li>
           <li>Hook and tool names, and the size of the hook's input.</li>
           <li>Which instruction files loaded, as repo-relative paths.</li>
+          <li>Each skill loaded: its name, a hash of its exact version, and whether the session or one of its subagents loaded it.</li>
+          <li>Which Livy build wrote each line.</li>
         </ul>
       </div>
       <div class="col no">
@@ -212,6 +218,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
           <li>Reply text, unless you opt in on that machine.</li>
           <li>Tool inputs or outputs, and shell commands.</li>
           <li>Your working folder or transcript paths.</li>
+          <li>A skill's text, or the folder it came from.</li>
           <li>A PR number read from <code>gh pr create</code> output.</li>
           <li>Anything from repos outside the orgs you name.</li>
         </ul>
@@ -220,16 +227,50 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
     <p class="soft" style="font-size:15px">Prompt capture is off by default. Until you turn it on for a machine, Livy stores only the prompt's id, not its text.</p>
   </section>
 
+  <section id="harnesses">
+    <header>
+      <span class="label">Agents</span>
+      <h2>What it sees in each agent</h2>
+    </header>
+    <div class="rules">
+      <div class="rule"><b>Claude Code</b><p>Hooks call Livy at session start and end, on each prompt, each tool call and each skill load. Everything on this page applies.</p></div>
+      <div class="rule"><b>Amp</b><p>A small plugin hands Livy each thread's start, prompts, tool calls, skill loads, PRs opened, turn ends and token use. It records threads on your laptop and, with a ready-made setup that ships through a git repository, in Amp's hosted machines. Amp doesn't report which instruction files loaded, a model switch or a session end, so Livy says those are not observable instead of guessing.</p></div>
+      <div class="rule"><b>Codex</b><p>Livy reads Codex's own session logs for token use per call and for prompts, and turns on Codex's OTEL export. Commits Codex makes get trailers. Codex doesn't call Livy's hooks yet, so its sessions, tool calls and skill loads are not recorded live.</p></div>
+    </div>
+  </section>
+  <section id="skills">
+    <div class="side">
+      <div class="txt">
+        <span class="label">Skills</span>
+        <h2>Which skill ran, down to the version</h2>
+        <p>Skills change, and a copy on one machine can drift from the copy on another. Each time Claude Code or Amp loads a skill, Livy writes a <code>skill.loaded</code> line: the skill's name, a hash of its <code>SKILL.md</code> and of its whole folder as they were on disk right after the load, and whether the model asked for it or a person typed <code>/name</code>.</p>
+        <p class="soft">When a subagent loads the skill, the line says which one. The line never holds the skill's text, the words typed after <code>/name</code>, or a path: a skill kept in a folder goes out as a hash of that folder.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>skill.loaded</span><span>example</span></div>
+<pre>{<span class="wn">"event"</span>: <span class="r">"skill.loaded"</span>,
+ <span class="wn">"harness"</span>: <span class="r">"claude-code"</span>,
+ <span class="wn">"skill"</span>: <span class="r">"go-review"</span>,
+ <span class="wn">"scope"</span>: <span class="r">"project"</span>,
+ <span class="wn">"trigger"</span>: <span class="r">"agent"</span>,
+ <span class="wn">"subagent_type"</span>: <span class="r">"general-purpose"</span>,
+ <span class="wn">"sha256"</span>: <span class="r">"4c1e9a0b…"</span>,
+ <span class="wn">"tree_sha256"</span>: <span class="r">"b72d0517…"</span>,
+ <span class="wn">"hash_method"</span>: <span class="r">"disk-after-load"</span>,
+ <span class="wn">"recorder_build"</span>: <span class="r">"5d81c0e4a2f7"</span>}</pre>
+      </div>
+    </div>
+  </section>
   <section id="how">
     <header>
       <span class="label">How it works</span>
       <h2>Four steps, all local</h2>
     </header>
     <ol class="flow">
-      <li><span class="n">1</span><b>Hooks</b><p>Claude Code and Codex call Livy at session start, each prompt and each tool. Git calls it on branch switch and commit.</p></li>
+      <li><span class="n">1</span><b>Hooks</b><p>Claude Code's hooks and Amp's plugin call Livy at session start, each prompt and each tool. Git calls it on branch switch and commit. Codex's logs are read after the fact.</p></li>
       <li><span class="n">2</span><b>Ledger</b><p>Each event becomes one JSON line, appended locally. A failed write is recorded as an error event, never dropped quietly.</p></li>
-      <li><span class="n">3</span><b>Emit</b><p>At session end, and daily, the ledger is rotated, checked and compressed. Raw lines are never edited, and uploaded files stay on your machine for 30 days.</p></li>
-      <li><span class="n">4</span><b>Sink</b><p>Segments go to a folder you choose, Google Cloud Storage or S3. Each file is named by its content, so a retry is harmless.</p></li>
+      <li><span class="n">3</span><b>Emit</b><p>At session end, at most every 5 minutes mid-session, and daily, the ledger is rotated, checked and compressed. Raw lines are never edited, and uploaded files stay on your machine for 30 days.</p></li>
+      <li><span class="n">4</span><b>Sink</b><p>Segments go to a folder you choose, Google Cloud Storage, S3 or a git repository. Each file is named by its content, so a retry is harmless.</p></li>
     </ol>
   </section>
 
@@ -239,7 +280,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
         <span class="label">Commit trailers</span>
         <h2>Every agent commit, recorded</h2>
         <p>When Claude Code or Codex makes a commit, Livy adds the session, the harness and the model as git trailers. Your own commits get no trailers, but every commit in your repos is still recorded in the ledger.</p>
-        <p class="soft">The model is stamped only when every agent active in that session agrees on it. If Livy can't be sure, it leaves the model out rather than guess. A trailer failure never blocks a commit.</p>
+        <p class="soft">The model is stamped only when one model did all of that session's work since its previous commit. If Livy can't be sure, it leaves the model out rather than guess. A trailer failure never blocks a commit.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>git log -1</span><span>example</span></div>
@@ -276,6 +317,29 @@ them at five attempts.
     </div>
   </section>
 
+  <section id="profile">
+    <div class="side">
+      <div class="txt">
+        <span class="label">livy profile</span>
+        <h2>Where a commit's time went</h2>
+        <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working (model calls and tools), the agent waiting on you, and the rest. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
+        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine, and prints names, durations and counts, never prompt or tool text.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>livy profile a91c0e2</span><span>shortened</span></div>
+<pre><span class="r">commit</span> a91c0e2
+<span class="r">session</span> 3b0e… (claude-code)
+  wall 11m23s, from the first prompt at 09:41:12
+  agent 6m48s (model 4m10s, tools 2m38s),
+  waiting on the human 3m51s, other 44.0s
+  turn at 09:41:12  4m2s
+    model claude-opus-5-5  1m31s
+    tool Bash  48.2s
+    subagent (Task)  1m12s
+    waiting on approval  2m5s</pre>
+      </div>
+    </div>
+  </section>
   <section id="incident">
     <div class="side">
       <div class="txt">
@@ -297,7 +361,7 @@ approved 12 · refused 1 · out 17,944 tok
 
 <span class="r">## c7d2f10</span>  Cap retries at five attempts
 ticket   PAY-412 · codex · gpt-5-codex
-prompts  1 · Edit 2 · out 3,210 tok
+out 3,210 tok
 
 <span class="r">## 5e0b8a4</span>  Bump the HTTP client
 <span class="c">no agent session · human commit</span></pre>
@@ -310,13 +374,17 @@ prompts  1 · Edit 2 · out 3,210 tok
       <div class="txt">
         <span class="label">livy doctor</span>
         <h2>Check that Livy is still recording</h2>
-        <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks, the ledger, the git hooks and commit trailers, where your data goes, and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
+        <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks and the Amp plugin, the ledger, the git hooks and commit trailers, where your data goes, the OTEL receiver and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
+        <p class="soft">When a repo's git hooks have gone missing, doctor names the repo and prints the <code>livy install</code> line that puts them back. <code>livy version</code> says which build is installed, and every ledger line carries that build, so two machines can be compared.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy doctor</span></div>
-<pre><span class="ok">[ok]</span>   hooks            Claude Code and Codex
+<pre><span class="ok">[ok]</span>   hooks            Claude Code
+<span class="ok">[ok]</span>   amp plugin       loaded
 <span class="ok">[ok]</span>   ledger           written 2 min ago
-<span class="ok">[ok]</span>   commit trailers  stamped in 3 repos
+<span class="ok">[ok]</span>   commit trailers  stamped in 2 repos
+<span class="wn">[warn]</span> git hooks        gone from 1 repo: run
+                        livy install --repo ~/src/web
 <span class="ok">[ok]</span>   sink             local · ~/livy-data
 <span class="ok">[ok]</span>   otel receiver    up · tool decisions stored
 <span class="ok">[ok]</span>   daily flush      launchd
@@ -332,7 +400,7 @@ prompts  1 · Edit 2 · out 3,210 tok
         <span class="label">Prompt capture</span>
         <h2>Prompt text stays on your machine</h2>
         <p>Livy keeps the text of your prompts in a private vault on your own machine for 90 days, so you can still see what was asked after the agent's transcripts are cleaned up. <code>livy vault backfill</code> fills it from transcripts already on disk.</p>
-        <p class="soft"><code>livy show --prompt &lt;id&gt;</code> or <code>--commit &lt;sha&gt;</code> shows you exactly what would be shared: secrets, credentials and the names on your denylist are replaced, and it refuses to run without a denylist. Every reveal is logged with the prompt ids, never the text.</p>
+        <p class="soft"><code>livy show --prompt &lt;id&gt;</code> or <code>--commit &lt;sha&gt;</code> shows you exactly what would be shared: secrets, credentials and the names on your denylist are replaced by <a href="https://github.com/0xbew/scrub">scrub</a>, Livy's public scrubber, and it refuses to run without a denylist. Since scrub v0.3.0 that includes password hashes and passwords with dots in them. Every reveal is logged with the prompt ids, never the text.</p>
         <p class="soft">Sending prompt text anywhere is off until an engineer opts in on their own machine. It goes to its own destination, separate from the ledger, with a 180-day retention rule.</p>
       </div>
       <div class="panel">
@@ -357,8 +425,8 @@ Run the webhook tests and commit.
   <section id="install">
     <header>
       <span class="label">Install</span>
-      <h2>Three steps on macOS</h2>
-      <p class="soft">Needs Go 1.27 or later and git. Livy is in private preview, so cloning needs access to the repository.</p>
+      <h2>Three steps on macOS or Linux</h2>
+      <p class="soft">Needs Go 1.27 or later and git. Livy is open source under the Apache-2.0 license.</p>
     </header>
     <ol class="steps">
       <li>
@@ -394,20 +462,20 @@ livy doctor</pre>
         </div>
       </li>
     </ol>
-    <p class="soft">Install adds hooks to Claude Code and Codex, a branch hook and a commit-trailer hook to each repo in your orgs, and a daily flush. Running it again changes nothing. <code>livy uninstall</code> removes exactly that and keeps your data.</p>
+    <p class="soft">Install adds hooks to Claude Code, a plugin to Amp when Amp is installed, OTEL export settings to Claude Code and Codex pointed at Livy's local receiver, a branch hook and commit hooks to each repo in your orgs, and a daily flush. Running it again changes nothing. <code>livy uninstall</code> removes exactly that and keeps your data.</p>
   </section>
 
   <section id="principles">
     <header><span class="label">Rules it keeps</span></header>
     <div class="rules">
       <div class="rule"><b>Never block the agent</b><p>Every hook exits cleanly, whatever goes wrong. Your session and your commits never wait on Livy.</p></div>
-      <div class="rule"><b>Never fail silently</b><p>When a real event can't be written, Livy writes an error event that says why. A gap in the record is visible.</p></div>
+      <div class="rule"><b>Never fail silently</b><p>When a real event can't be written, Livy writes an error event that says why. A damaged state file holds that pass and says so, rather than starting over and skipping or repeating data. A gap in the record is visible.</p></div>
       <div class="rule"><b>Raw is never rewritten</b><p>The ledger is append-only and the schema only grows. Anything built from it can be rebuilt from it.</p></div>
     </div>
   </section>
 
   <footer>
-    <span>livy · v0.1.0</span>
+    <span>livy · v0.1.0 and later · page updated 2026-11-23</span>
   </footer>
 </div>
 
@@ -434,9 +502,10 @@ Array.prototype.forEach.call(document.querySelectorAll('.copybtn[data-copy]'),fu
 
   var repos=['acme/payments','acme/web','acme/infra','acme/mobile'];
   var tickets=['PAY-418-idempotency-keys','WEB-207-checkout-copy','INF-93-rotate-certs','MOB-61-offline-cart','PAY-421-refund-events','WEB-212-a11y-forms'];
-  var harnesses=['claude-code','codex'];
-  var skills={'claude-code':['CLAUDE.md','CLAUDE.md, .claude/skills/go','CLAUDE.md, .claude/skills/ts'],'codex':['AGENTS.md']};
-  var models={'claude-code':['claude-opus-5-5','claude-sonnet-5-5'],'codex':['gpt-5-codex']};
+  var harnesses=['claude-code','amp'];
+  var instr=['CLAUDE.md','CLAUDE.md, web/CLAUDE.md'];
+  var skillNames=['go-review','ts-style','release-notes','db-migrations'];
+  var models={'claude-code':['claude-opus-5-5','claude-sonnet-5-5'],'amp':['claude-opus-5-5']};
   function pick(a){return a[Math.floor(Math.random()*a.length)]}
   function hex(n){var s='';while(s.length<n)s+=Math.floor(Math.random()*16).toString(16);return s}
   function esc(t){return String(t).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
@@ -449,14 +518,17 @@ Array.prototype.forEach.call(document.querySelectorAll('.copybtn[data-copy]'),fu
     var h=pick(harnesses), repo=pick(repos), br=pick(tickets), model=pick(models[h]), out=[];
     out.push(['session.started',[['harness',h],['repo',repo]]]);
     out.push(['work.started',[['branch',br]]]);
-    out.push(['instructions.loaded',[[null,pick(skills[h])]]]);
+    // Amp reports no loaded instruction files, so none is shown for it.
+    if(h==='claude-code') out.push(['instructions.loaded',[[null,pick(instr)]]]);
+    if(Math.random()<.7) out.push(['skill.loaded',[[null,pick(skillNames)],['sha256',hex(4)+'…'],['by',Math.random()<.5?'session':'subagent']]]);
     var turns=2+Math.floor(Math.random()*3);
     for(var i=0;i<turns;i++){
-      out.push(['prompt.captured',[['prompt_id',hex(4)+'…'],['text','not stored']]]);
+      out.push(h==='amp'?['prompt.submitted',[['text','not stored']]]:['prompt.captured',[['prompt_id',hex(4)+'…'],['text','not stored']]]);
       out.push(['usage.api_call',[['model',model],['out',(800+Math.floor(Math.random()*6000)).toLocaleString('en-US')+' tok']]]);
     }
     var tk=br.split('-').slice(0,2).join('-'), sha=hex(7);
-    out.push(['commit.recorded',[[null,sha],['ticket',tk],['prompt_id',hex(4)+'…']]]);
+    // Only Claude Code's commits carry the prompt behind them.
+    out.push(['commit.recorded',h==='claude-code'?[[null,sha],['ticket',tk],['prompt_id',hex(4)+'…']]:[[null,sha],['ticket',tk]]]);
     if(Math.random()<.3) out.push(['commit.rewritten',[[null,sha+' → '+hex(7)],['kind','amend']]]);
     if(Math.random()<.6) out.push(['work.pr_opened',[['branch',br]]]);
     return out;
