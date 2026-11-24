@@ -170,7 +170,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
     <div class="copy">
       <h1>Write it down <em>while it happens.</em></h1>
       <p class="lead">Livy records what your coding agents do: sessions, prompts, branch switches, the model behind each turn, token use, which instruction files actually loaded, and which version of each skill ran. One line per event, in an append-only ledger. It never blocks the agent.</p>
-      <p class="soft">Works with Claude Code and Amp, and reads Codex's own logs. Livy is one small Go program, built from source: the agents' hooks call it as things happen, a scheduled flush ships the ledger, and a background receiver takes the agents' OTEL export unless you turn it off. Your data goes to a folder you choose, your own bucket, or a git repository.</p>
+      <p class="soft">Works with Claude Code and Amp, and reads Codex's own logs. Livy is one small Go program, built from source: the agents' hooks call it as things happen, a scheduled flush ships the ledger, and a background receiver takes the agents' OTEL export, as JSON or protobuf, unless you turn it off. Your data goes to a folder you choose, your own bucket, or a git repository.</p>
       <div class="ctas">
         <a class="btn primary" href="#install">Install Livy</a>
       </div>
@@ -340,6 +340,28 @@ them at five attempts.
       </div>
     </div>
   </section>
+
+  <section id="pr">
+    <div class="side">
+      <div class="txt">
+        <span class="label">livy pr</span>
+        <h2>A pull request's agent work, in under a second</h2>
+        <p><code>livy pr --json --repo OWNER/NAME --branch B</code> answers what <code>livy why</code> and <code>livy profile</code> answer, for a pull request's commits at once, plus the skills loaded while each commit was made. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
+        <p class="soft">It reads only the lines those commits need from a local index Livy keeps as it records, so its cost follows the pull request, not the machine's history. <code>livy reindex</code> rebuilds the index, and the daily flush builds it when it is missing. With no usable index, it reads everything and says so.</p>
+      </div>
+      <div class="panel">
+        <div class="bar"><span>livy pr --json --repo acme/web --branch pay-412</span><span>shortened</span></div>
+<pre>{
+  <span class="r">"schema"</span>: "livy.pr/1",
+  <span class="r">"commits"</span>: ["a91c0e2", "c7d3b10"],
+  <span class="r">"source"</span>: {"kind": "index"},
+  <span class="r">"why"</span>:     { <span class="c">sessions, prompts, tools, tokens</span> },
+  <span class="r">"profile"</span>: { <span class="c">agent, waiting, other</span> },
+  <span class="r">"skills"</span>:  [ <span class="c">each skill loaded, by version</span> ]
+}</pre>
+      </div>
+    </div>
+  </section>
   <section id="incident">
     <div class="side">
       <div class="txt">
@@ -375,6 +397,7 @@ out 3,210 tok
         <span class="label">livy doctor</span>
         <h2>Check that Livy is still recording</h2>
         <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks and the Amp plugin, the ledger, the git hooks and commit trailers, where your data goes, the OTEL receiver and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
+        <p class="soft">On a machine with company-managed Claude Code settings, doctor reads them the way Claude Code applies them. It names each managed setting that keeps Claude Code's OTEL export from reaching Livy, and shows how many exports the receiver stored and refused. <code>livy install</code> leaves managed settings alone and prints the conflict.</p>
         <p class="soft">When a repo's git hooks have gone missing, doctor names the repo and prints the <code>livy install</code> line that puts them back. <code>livy version</code> says which build is installed, and every ledger line carries that build, so two machines can be compared.</p>
       </div>
       <div class="panel">
