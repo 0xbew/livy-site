@@ -323,7 +323,7 @@ them at five attempts.
         <span class="label">livy profile</span>
         <h2>Where a commit's time went</h2>
         <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working (model calls and tools), the agent waiting on you, and the rest. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
-        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine, and prints names, durations and counts, never prompt or tool text.</p>
+        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call (without it, only shell commands are timed as tools). It prints names, durations and counts, never prompt or tool text.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy profile a91c0e2</span><span>shortened</span></div>
@@ -346,8 +346,9 @@ them at five attempts.
       <div class="txt">
         <span class="label">livy pr</span>
         <h2>A pull request's agent work, in one call</h2>
-        <p><code>livy pr --json --repo OWNER/NAME --branch B</code> gives the same answer as <code>livy why</code> and <code>livy profile</code> for all of a pull request's commits at once, plus the skills loaded while each commit was made. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
+        <p><code>livy pr --json --repo OWNER/NAME --branch B</code> gives the same answer as <code>livy why</code> and <code>livy profile</code> for all of a pull request's commits at once, plus the skills loaded while each commit was made, and an estimate of what the pull request cost. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
         <p class="soft">It reads only the lines those commits need from a local index Livy keeps as it records, so its cost follows the pull request, not the machine's history. <code>livy reindex</code> rebuilds the index, and the daily flush builds it when it is missing. With no usable index, it reads everything and says so.</p>
+        <p class="soft">The estimate prices each API call at the vendors' list prices, from a table built into the binary, each price with its source and the date it was read. A call to a model the table lacks is counted as unpriced, never priced at $0, so with any unpriced call the estimate is a floor. Beside it are the cache hit rate and the cache drops mid-burst: calls that lost the prompt cache within 5 minutes of the previous call and wrote it again. Your plan or contract may bill differently.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy pr --json --repo acme/web --branch pay-412</span><span>shortened</span></div>
@@ -357,7 +358,8 @@ them at five attempts.
   <span class="r">"source"</span>: {"kind": "index"},
   <span class="r">"why"</span>:     { <span class="c">sessions, prompts, tools, tokens</span> },
   <span class="r">"profile"</span>: { <span class="c">agent, waiting, other</span> },
-  <span class="r">"skills"</span>:  [ <span class="c">each skill loaded, by version</span> ]
+  <span class="r">"skills"</span>:  [ <span class="c">each skill loaded, by version</span> ],
+  <span class="r">"cost"</span>:    { <span class="c">estimated_usd, unpriced_calls, cache_hit_rate, cache_drops_mid_burst</span> }
 }</pre>
       </div>
     </div>
@@ -498,7 +500,7 @@ livy doctor</pre>
   </section>
 
   <footer>
-    <span>livy · v0.1.0 and later · page updated 2026-11-24</span>
+    <span>livy · v0.1.0 and later · page updated 2026-11-25</span>
   </footer>
 </div>
 
