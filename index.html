@@ -323,7 +323,7 @@ them at five attempts.
         <span class="label">livy profile</span>
         <h2>Where a commit's time went</h2>
         <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working (model calls and tools), the agent waiting on you, and the rest. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
-        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine, and prints names, durations and counts, never prompt or tool text.</p>
+        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call. It prints names, durations and counts, never prompt or tool text.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy profile a91c0e2</span><span>shortened</span></div>
