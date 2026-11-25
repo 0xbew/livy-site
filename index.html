@@ -323,7 +323,8 @@ them at five attempts.
         <span class="label">livy profile</span>
         <h2>Where a commit's time went</h2>
         <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working (model calls and tools), the agent waiting on you, and the rest. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
-        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call (without it, only shell commands are timed as tools). It prints names, durations and counts, never prompt or tool text.</p>
+        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call (without it, only shell commands are timed as tools). A session with model and tool calls but no prompt line, which happens when Claude Code was started in a folder outside the repo, is timed from its calls, and its turns are marked "turns inferred". It prints names, durations, counts and tool targets, never prompt text, an argument's value or a tool's output.</p>
+        <p class="soft">Each timed commit also carries its trace: a lane for the main agent and one for each subagent, named by its task label, and every model call with its tokens and a cache verdict: first call, hit, partial miss or full miss. A miss also gives its cause, such as a compaction, a switch of model or an idle gap past the cache's lifetime. A tool call shows its target: the file, folder, program, host or task label, never an argument's value or any output. Targets are scrubbed with your denylist (with none, no target is kept), stay on your machine for 90 days and are never shipped to your sink.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy profile a91c0e2</span><span>shortened</span></div>
@@ -348,7 +349,7 @@ them at five attempts.
         <h2>A pull request's agent work, in one call</h2>
         <p><code>livy pr --json --repo OWNER/NAME --branch B</code> gives the same answer as <code>livy why</code> and <code>livy profile</code> for all of a pull request's commits at once, plus the skills loaded while each commit was made, and an estimate of what the pull request cost. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
         <p class="soft">It reads only the lines those commits need from a local index Livy keeps as it records, so its cost follows the pull request, not the machine's history. <code>livy reindex</code> rebuilds the index, and the daily flush builds it when it is missing. With no usable index, it reads everything and says so.</p>
-        <p class="soft">The estimate prices each API call at the vendors' list prices, from a table built into the binary, each price with its source and the date it was read. A call to a model the table lacks is counted as unpriced, never priced at $0, so with any unpriced call the estimate is a floor. Beside it are the cache hit rate and the cache drops mid-burst: calls that lost the prompt cache within 5 minutes of the previous call and wrote it again. Your plan or contract may bill differently.</p>
+        <p class="soft">The estimate prices each API call at the vendors' list prices, from a table built into the binary, which prices every Anthropic model the vendor lists as available or recently retired, each price with its source and the date it was read. A call to a model the table lacks, or with a prompt longer than any the vendor publishes a rate for, is counted as unpriced, never priced at $0 (OpenAI models, used by Codex, are not priced yet), so with any unpriced call the estimate is a floor. Beside it are the cache hit rate, the cache misses by cause, and the cache drops mid-burst: calls that lost the prompt cache within 5 minutes of the previous call and wrote it again. Your plan or contract may bill differently.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>livy pr --json --repo acme/web --branch pay-412</span><span>shortened</span></div>
@@ -357,9 +358,9 @@ them at five attempts.
   <span class="r">"commits"</span>: ["a91c0e2", "c7d3b10"],
   <span class="r">"source"</span>: {"kind": "index"},
   <span class="r">"why"</span>:     { <span class="c">sessions, prompts, tools, tokens</span> },
-  <span class="r">"profile"</span>: { <span class="c">agent, waiting, other</span> },
+  <span class="r">"profile"</span>: { <span class="c">agent, waiting, other, the trace</span> },
   <span class="r">"skills"</span>:  [ <span class="c">each skill loaded, by version</span> ],
-  <span class="r">"cost"</span>:    { <span class="c">estimated_usd, unpriced_calls, cache_hit_rate, cache_drops_mid_burst</span> }
+  <span class="r">"cost"</span>:    { <span class="c">estimated_usd, unpriced_calls, cache_hit_rate, cache_misses, cache_drops_mid_burst</span> }
 }</pre>
       </div>
     </div>
@@ -399,7 +400,8 @@ out 3,210 tok
         <span class="label">livy doctor</span>
         <h2>Check that Livy is still recording</h2>
         <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks and the Amp plugin, the ledger, the git hooks and commit trailers, where your data goes, the OTEL receiver and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
-        <p class="soft">On a machine with company-managed Claude Code settings, doctor works out which settings Claude Code actually uses, where managed settings override yours. It names each managed setting that keeps Claude Code's OTEL export from reaching Livy, and shows how many exports the receiver stored and refused. <code>livy install</code> leaves managed settings alone and prints the conflict.</p>
+        <p class="soft">On a machine with company-managed Claude Code settings, doctor works out which settings Claude Code actually uses, where managed settings override yours. It names each managed setting that keeps Claude Code's OTEL export from reaching Livy, and shows how many exports the receiver stored and refused. <code>livy install</code> leaves managed settings alone and prints the conflict. While Livy's own hooks time Claude Code, doctor shows those settings as ok with a note, not as a failure.</p>
+        <p class="soft">When Claude Code sessions were started in a folder outside the repo they worked in, doctor says so: Livy has their calls and tools but not their prompts, so their turns are inferred. Start Claude Code inside the repo to record prompts.</p>
         <p class="soft">When a repo's git hooks have gone missing, doctor names the repo and prints the <code>livy install</code> line that puts them back. <code>livy version</code> says which build is installed, and every ledger line carries that build, so two machines can be compared.</p>
       </div>
       <div class="panel">
@@ -413,8 +415,10 @@ out 3,210 tok
 <span class="ok">[ok]</span>   sink             local · ~/livy-data
 <span class="ok">[ok]</span>   otel receiver    up · tool decisions stored
 <span class="ok">[ok]</span>   daily flush      launchd
-<span class="wn">[warn]</span> denylist         none (only needed for
-                        prompt capture)</pre>
+<span class="wn">[warn]</span> denylist         none (needed for prompt
+                        capture and tool targets)
+<span class="wn">[warn]</span> prompt capture   1 session worked in acme/web
+                        from a folder outside it</pre>
       </div>
     </div>
   </section>
@@ -487,7 +491,7 @@ livy doctor</pre>
         </div>
       </li>
     </ol>
-    <p class="soft">Install adds hooks to Claude Code, a plugin to Amp when Amp is installed, OTEL export settings to Claude Code and Codex pointed at Livy's local receiver, a branch hook and commit hooks to each repo in your orgs, and a daily flush. Running it again changes nothing. <code>livy uninstall</code> removes exactly that and keeps your data.</p>
+    <p class="soft">Install adds hooks to Claude Code, a plugin to Amp when Amp is installed, OTEL export settings to Claude Code and Codex pointed at Livy's local receiver, a branch hook and commit hooks to each repo in your orgs, and a daily flush. Running it again changes nothing. <code>livy uninstall</code> removes exactly that and keeps your data. A data folder other than the one install set up, such as a scratch <code>LIVY_DIR</code> for a test, never uploads to the sinks in your own config, only to sinks named in that folder's <code>config.json</code> or set by the managed file or the environment; <code>livy doctor</code> says when one is in use.</p>
   </section>
 
   <section id="principles">
