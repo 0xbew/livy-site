@@ -243,8 +243,9 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
       <div class="txt">
         <span class="label">Skills</span>
         <h2>Which skill ran, down to the version</h2>
-        <p>Skills change, and a copy on one machine can drift from the copy on another. Each time Claude Code or Amp loads a skill, Livy writes a <code>skill.loaded</code> line: the skill's name, a hash of its <code>SKILL.md</code> and of its whole folder as they were on disk right after the load, and whether the model asked for it or a person typed <code>/name</code>.</p>
+        <p>Skills change, and a copy on one machine can drift from the copy on another. Each time Claude Code or Amp loads a skill, Livy's hook writes a <code>skill.loaded</code> line: the skill's name, a hash of its <code>SKILL.md</code> and of its whole folder as they were on disk right after the load, and whether the model asked for it or a person typed <code>/name</code>.</p>
         <p class="soft">When a subagent loads the skill, the line says which one. The line never holds the skill's text, the words typed after <code>/name</code>, or a path: a skill kept in a folder goes out as a hash of that folder.</p>
+        <p class="soft">Livy also reads each Claude Code agent's transcript for the skills it used and writes a <code>skill.loaded</code> line for each use, marked as found in the transcript and without the hashes. That catches what the hooks miss: when Claude Code was started outside the repo (where the hooks don't fire), or when an agent reads a <code>SKILL.md</code> instead of calling the skill. <code>livy pr</code> says how each skill was used (called, read, or typed as <code>/name</code>) and whether the hook or the transcript saw it.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>skill.loaded</span><span>example</span></div>
@@ -322,8 +323,8 @@ them at five attempts.
       <div class="txt">
         <span class="label">livy profile</span>
         <h2>Where a commit's time went</h2>
-        <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working (model calls and tools), the agent waiting on you, and the rest. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
-        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call (without it, only shell commands are timed as tools). A session with model and tool calls but no prompt line, which happens when Claude Code was started in a folder outside the repo, is timed from its calls, and its turns are marked "turns inferred". It prints names, durations, counts and tool targets, never prompt text, an argument's value or a tool's output.</p>
+        <p><code>livy profile &lt;sha&gt;</code>, or a range, splits the time behind each commit into the agent working, the agent waiting on you, and the rest. The agent's time is split three ways: the session's own model calls, its own tool calls, and the time when only its subagents were working. It prints each turn with its model calls, tools and subagents, the longest of them, and the rework it can see: fixup commits, amends and rebases, and files the session changed again.</p>
+        <p class="soft">It reads the OTEL spans Livy's receiver keeps on this machine. Where no span reaches Livy, for example when company-managed settings send Claude Code's OTEL elsewhere, it times a Claude Code session from Livy's own hooks instead and says so ("from hooks"); run <code>livy install</code> again to add the hook that times each tool call (without it, only shell commands are timed as tools). A session with model and tool calls but no prompt line, which happens when Claude Code was started in a folder outside the repo, is timed from its calls, and its turns are marked "turns inferred". When a model call's start cannot be known, because its agent was first waiting on something Livy doesn't record (a subagent left running in the background, say), that stretch is counted under "other", not read as one long model call. It prints names, durations, counts and tool targets, never prompt text, an argument's value or a tool's output.</p>
         <p class="soft">Each timed commit also carries its trace: a lane for the main agent and one for each subagent, named by its task label, and every model call with its tokens and a cache verdict: first call, hit, partial miss or full miss. A miss also gives its cause, such as a compaction, a switch of model or an idle gap past the cache's lifetime. A tool call shows its target: the file, folder, program, host or task label, never an argument's value or any output. Targets are scrubbed with your denylist (with none, no target is kept), stay on your machine for 90 days and are never shipped to your sink.</p>
       </div>
       <div class="panel">
@@ -331,7 +332,8 @@ them at five attempts.
 <pre><span class="r">commit</span> a91c0e2
 <span class="r">session</span> 3b0e… (claude-code)
   wall 11m23s, from the first prompt at 09:41:12
-  agent 6m48s (model 4m10s, tools 2m38s),
+  agent 6m48s (model 3m02s, tools 2m38s,
+  subagents 1m08s),
   waiting on the human 3m51s, other 44.0s
   turn at 09:41:12  4m2s
     model claude-opus-5-5  1m31s
@@ -347,8 +349,9 @@ them at five attempts.
       <div class="txt">
         <span class="label">livy pr</span>
         <h2>A pull request's agent work, in one call</h2>
-        <p><code>livy pr --json --repo OWNER/NAME --branch B</code> gives the same answer as <code>livy why</code> and <code>livy profile</code> for all of a pull request's commits at once, plus the skills loaded while each commit was made, and an estimate of what the pull request cost. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
+        <p><code>livy pr --json --repo OWNER/NAME --branch B</code> gives the same answer as <code>livy why</code> and <code>livy profile</code> for all of a pull request's commits at once, plus the skills used while each commit was made, and an estimate of what the pull request cost. It writes one JSON document, so a PR viewer can show it beside the diff.</p>
         <p class="soft">It reads only the lines those commits need from a local index Livy keeps as it records, so its cost follows the pull request, not the machine's history. <code>livy reindex</code> rebuilds the index, and the daily flush builds it when it is missing. With no usable index, it reads everything and says so.</p>
+        <p class="soft">When a commit's session has no model call in the ledger during the time behind that commit, <code>livy pr</code> says why instead of showing zeros: the transcript hasn't been read yet (run <code>livy extract</code>), the session worked outside your repos, the session made no model call (a script or hook made the commit), its transcript isn't on this machine, it ran in another agent, such as Codex, or its transcript couldn't be read in full. A viewer can then show that time as unknown, not 0. To tell these apart, <code>livy pr</code> reads only the calls' ids and times from the transcript, never its text.</p>
         <p class="soft">The estimate prices each API call at the vendors' list prices, from a table built into the binary, which prices every Anthropic model the vendor lists as available or recently retired, each price with its source and the date it was read. A call to a model the table lacks, or with a prompt longer than any the vendor publishes a rate for, is counted as unpriced, never priced at $0 (OpenAI models, used by Codex, are not priced yet), so with any unpriced call the estimate is a floor. Beside it are the cache hit rate, the cache misses by cause, and the cache drops mid-burst: calls that lost the prompt cache within 5 minutes of the previous call and wrote it again. Your plan or contract may bill differently.</p>
       </div>
       <div class="panel">
@@ -359,7 +362,8 @@ them at five attempts.
   <span class="r">"source"</span>: {"kind": "index"},
   <span class="r">"why"</span>:     { <span class="c">sessions, prompts, tools, tokens</span> },
   <span class="r">"profile"</span>: { <span class="c">agent, waiting, other, the trace</span> },
-  <span class="r">"skills"</span>:  [ <span class="c">each skill loaded, by version</span> ],
+  <span class="r">"skills"</span>:  [ <span class="c">each skill used, how, and its version when the hook saw it</span> ],
+  <span class="r">"empty_windows"</span>: [ <span class="c">each commit's session with no model call, and why</span> ],
   <span class="r">"cost"</span>:    { <span class="c">estimated_usd, unpriced_calls, cache_hit_rate, cache_misses, cache_drops_mid_burst</span> }
 }</pre>
       </div>
@@ -504,7 +508,7 @@ livy doctor</pre>
   </section>
 
   <footer>
-    <span>livy · v0.1.0 and later · page updated 2026-11-25</span>
+    <span>livy · v0.1.0 and later · page updated 2026-11-27</span>
   </footer>
 </div>
 
