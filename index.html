@@ -246,6 +246,7 @@ footer{border-top:1px solid var(--line);padding-top:22px;display:flex;justify-co
         <p>Skills change, and a copy on one machine can drift from the copy on another. Each time Claude Code or Amp loads a skill, Livy's hook writes a <code>skill.loaded</code> line: the skill's name, a hash of its <code>SKILL.md</code> and of its whole folder as they were on disk right after the load, and whether the model asked for it or a person typed <code>/name</code>.</p>
         <p class="soft">When a subagent loads the skill, the line says which one. The line never holds the skill's text, the words typed after <code>/name</code>, or a path: a skill kept in a folder goes out as a hash of that folder.</p>
         <p class="soft">Livy also reads each Claude Code agent's transcript for the skills it used and writes a <code>skill.loaded</code> line for each use, marked as found in the transcript and without the hashes. That catches what the hooks miss: when Claude Code was started outside the repo (where the hooks don't fire), or when an agent reads a <code>SKILL.md</code> instead of calling the skill. <code>livy pr</code> says how each skill was used (called, read, or typed as <code>/name</code>) and whether the hook or the transcript saw it.</p>
+        <p class="soft">Beyond the skills an agent used, Livy records the ones Claude Code offered it. Claude Code lists the available skills to the model when a session starts and again when more become available; for each list, Livy writes a <code>skills.listed</code> line with each skill's name and Claude Code's own hash for it, never its description. <code>livy pr</code> says, for each used skill, how many of the pull request's sessions had it listed, and which listed skills went unused. After an upgrade, Livy reads each transcript still on disk once more for its lists, so older sessions get them too.</p>
       </div>
       <div class="panel">
         <div class="bar"><span>skill.loaded</span><span>example</span></div>
@@ -363,6 +364,7 @@ them at five attempts.
   <span class="r">"why"</span>:     { <span class="c">sessions, prompts, tools, tokens</span> },
   <span class="r">"profile"</span>: { <span class="c">agent, waiting, other, the trace</span> },
   <span class="r">"skills"</span>:  [ <span class="c">each skill used, how, and its version when the hook saw it</span> ],
+  <span class="r">"skills_in_context"</span>: { <span class="c">sessions with a skill list; each skill listed, used, or both</span> },
   <span class="r">"empty_windows"</span>: [ <span class="c">each commit's session with no model call, and why</span> ],
   <span class="r">"cost"</span>:    { <span class="c">estimated_usd, unpriced_calls, cache_hit_rate, cache_misses, cache_drops_mid_burst</span> }
 }</pre>
@@ -406,6 +408,7 @@ out 3,210 tok
         <p>If capture breaks, nothing errors. The ledger just goes quiet. <code>livy doctor</code> checks each piece in one command: the agent hooks and the Amp plugin, the ledger, the git hooks and commit trailers, where your data goes, the OTEL receiver and the daily flush. It exits 0 only when everything is recording, so you can run it from a script or CI.</p>
         <p class="soft">On a machine with company-managed Claude Code settings, doctor works out which settings Claude Code actually uses, where managed settings override yours. It names each managed setting that keeps Claude Code's OTEL export from reaching Livy, and shows how many exports the receiver stored and refused. <code>livy install</code> leaves managed settings alone and prints the conflict. While Livy's own hooks time Claude Code, doctor shows those settings as ok with a note, not as a failure.</p>
         <p class="soft">When Claude Code sessions were started in a folder outside the repo they worked in, doctor says so: Livy has their calls and tools but not their prompts, so their turns are inferred. Start Claude Code inside the repo to record prompts.</p>
+        <p class="soft">Claude Code deletes transcripts after <code>cleanupPeriodDays</code>, 30 days unless you set it. Livy reads skill uses and skill lists from those transcripts, so any it has not read yet are lost when they go. Doctor warns when the setting is unset or under 60 days and suggests 90; a warning still exits 0.</p>
         <p class="soft">When a repo's git hooks have gone missing, doctor names the repo and prints the <code>livy install</code> line that puts them back. <code>livy version</code> says which build is installed, and every ledger line carries that build, so two machines can be compared.</p>
       </div>
       <div class="panel">
